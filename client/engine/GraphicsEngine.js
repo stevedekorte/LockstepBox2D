@@ -22,7 +22,7 @@
     this.setupCanvas()
     this.setupScene() 
     this.setupLight()
-    this.setupMouseController()
+    //this.setupMouseController()
 
     //this.mainLoop()
     this.startListeningForWindowResize()
@@ -55,7 +55,7 @@
     const scene = new CubicVR.Scene(canvas.width, canvas.height, 70);
     this.setScene(scene)
 
-    scene.camera.position = [30, 30, 30];
+    scene.camera.position = [0, 0, 30];
     scene.camera.target = [0, 0, 0];
   }
 

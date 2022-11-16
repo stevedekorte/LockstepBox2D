@@ -3,17 +3,16 @@
 (class BoxThing extends SimThing {
 
   initPrototype () {
-    this.newSlot("demo", null)
-    this.newSlot("width", 2)
-    this.newSlot("height", 1)
-    this.newSlot("depth", 1)
+    this.newSerializableSlot("width", 1)
+    this.newSerializableSlot("height", 1)
+    this.newSerializableSlot("depth", 0.1)
   }
 
   init () {
     super.init()
     //this.setShapeClass(Box2D.b2BodyDef)
     this.setTexturePath("client/resources/images/cube1.jpg")
-    this.setShapeDensity(5)
+    this.setShapeDensity(1)
   }
 
   // --- picking setup ---
@@ -23,24 +22,40 @@
       throw new Error("can't change body dimensions")
     }
 
+    /*
     this.setWidth(Math.random()*2 + 0.1)
     this.setHeight(Math.random()*2 + 0.1)
     //this.setDepth(Math.random()*2 + 0.1)
     this.setDepth(0.1)
+    */
     return this
   }
 
   pickPosition () {
-    const s = 30
+    const s = 3
     const x = s*(Math.random() - 0.5)*2;
-    const y = s*(Math.random() - 0.5)*2;
+    const y = 10 + s*(Math.random() - 0.5)*2;
     //const z = s*(Math.random() - 0.5)*2;
-    const z = 0
 
-    this.setPosXYZ(x, 30 + y, z)
+    const m = this.setupDefaultMotionStateMap()
+    m.set("positionArray", [x, y])
 
     //this.setRotationArray([1, 0, 0, 1])
     return this
+  }
+
+  pickVelocity () {
+    const s = 0.1
+    const vx = s*(Math.random() - 0.5)*2;
+    const vy = s*(Math.random() - 0.5)*2;
+    //this.setLinearVelocityArray([vx, vy])
+
+    const av = s*(Math.random() - 0.5)*2;
+    //this.setAngularVelocityArray([av])
+
+    const m = this.setupDefaultMotionStateMap()
+    m.set("linearVelocityArray", [vx, vy])
+    m.set("angularVelocityArray", [av])
   }
 
   // --- setup ---

@@ -52,7 +52,7 @@
     }
 
     setupView () {
-        this.view().setParentView(this.user().world())
+        this.view().setParentView(this.user().simApp())
     }
 
     startListening () {
@@ -186,8 +186,8 @@
     sharePosition () {
         const p = this.position()
         const rm = RemoteMessage.creationProxy().updateUserPointer(this.user().id(), p.x(), p.y())
-        const channel = this.user().world().channel()
-        channel.asyncRelayMessageFrom(rm, this.user().world().relayClient()) //.ignoreResponse()
+        const channel = this.user().simApp().channel()
+        channel.asyncRelayMessageFrom(rm, this.user().simApp().relayClient()) //.ignoreResponse()
     }
 
     timeStep () {

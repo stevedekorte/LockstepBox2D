@@ -13,7 +13,9 @@
     this.newSerializableSlot("shapeDensity", 0) // 0 for static fixtures
     this.newSlot("body", null)
     this.newSlot("fixture", null)
-    this.newSlot("isStatic", false)
+    this.newSerializableSlot("isStatic", false)
+    this.newSerializableSlot("restitution", 1)
+    this.newSerializableSlot("friction", 0)
 
     // view
     this.newSlot("material", null)
@@ -29,6 +31,19 @@
   setMass (m) {
     this.setShapeDensity(m)
     return this
+  }
+
+  setupDefaultMotionStateMap () {
+    let m = this.motionStateMap()
+    if (!m) {
+      m = new Map()
+      m.set("positionArray", [0, 0])
+      m.set("rotationArray", [0])
+      m.set("linearVelocityArray", [0, 0])
+      m.set("angularVelocityArray", [0])
+      this.setMotionStateMap(m)
+    }
+    return m
   }
 
   calcMotionStateMap () {
@@ -55,7 +70,9 @@
 
   asJson (loopCheck, refCreater) {
     // calc motion state slot, so it can be serialized
-    this.calcMotionStateMap()
+    if (!this.motionStateMap()) {
+      this.calcMotionStateMap()
+    }
     return super.asJson(loopCheck, refCreater)
   }
 
@@ -71,13 +88,22 @@
 
   simHash () {
     const m = this.motionStateMap()
-    this.calcMotionStateMap()
-    const hash = super.simHash()
+    if (!m) {
+      this.calcMotionStateMap()
+    }
+    const hash = this.motionStateMap().simHash()
     this.setMotionStateMap(m)
     return hash
   }
 
   // --- helpers ---
+
+  simEngine () {
+    if (!this._simEngine) {
+      return app.simEngine() // hack to get around deserialization issue
+    }
+    return this._simEngine
+  }
 
   scene () {
     return this.simEngine().graphicsEngine().scene()
@@ -88,7 +114,7 @@
   }
 
   world () {
-    return this.physicsEngine().world()
+    return this.simEngine().physicsEngine().world()
   }
 
   // ----
@@ -143,7 +169,8 @@
   setupFixture () {
     const fixture = this.body().CreateFixture(this.shape(), this.shapeDensity());
     this.setFixture(fixture)
-    fixture.SetRestitution(1)
+    //fixture.SetRestitution(this.restitution())
+    fixture.SetFriction(this.friction())
   }
   
   awaken () {
@@ -153,9 +180,14 @@
 
   addToWorld () {
     this.applyMotionStateMapIfPresent()
-
     // done in setupBody?
     this.awaken();
+  }
+
+  removeFromWorld () {
+    const body = this.body()
+    this.world().DestroyBody(body);
+    this.setBody(null)
   }
   
   // --- view ---
@@ -200,13 +232,15 @@
     this.scene().bindSceneObject(this.sceneObject(), true);
   }
 
+  removeFromScene () {
+    this.scene().removeSceneObject(this.sceneObject())
+  }
+
   // --- create & destroy ---
 
   create () {
-    // sim
     this.addToWorld()
-    // view
-    this.scene().bindSceneObject(this.sceneObject(), true);
+    this.addToScene()
   }
 
   willDestroy () {
@@ -214,11 +248,10 @@
   }
 
   destroy () {
-    const body = this.body()
-    this.scene().removeSceneObject(this.sceneObject())
-    this.world().DestroyBody(body);
-    this.setBody(null)
+    this.removeFromScene()
+    this.removeFromWorld()
   }
+
 
   // --- update ---
 
@@ -236,8 +269,47 @@
     return this.body().IsAwake()
   }
 
+  // --- stablize ---
+
+  stablize () {
+    this.stablizePosition()
+    //this.stablizeRotation()
+  }
+
   // --- position ---
 
+  stablizePosition () {
+    {
+      const lv1 = this.linearVelocityArray()
+      this.setLinearVelocityArray(lv1)
+      const lv2 = this.linearVelocityArray()
+      if(!lv1.shallowEquals(lv2)) {
+        debugger;
+      }
+    }
+
+    const p1 = this.body().GetPosition();
+    const r1 = this.body().GetAngle();
+    const lv1 = this.linearVelocityArray()
+    const av1 = this.angularVelocityArray()
+
+    this.body().SetTransform(new Box2D.b2Vec2(p1.get_x(), p1.get_y()), r1);
+    this.setLinearVelocityArray(lv1)
+    this.setAngularVelocityArray(av1)
+    
+    const p2 = this.body().GetPosition();
+    const r2 = this.body().GetAngle();
+    const lv2 = this.linearVelocityArray()
+    const av2 = this.angularVelocityArray()
+
+    // verify
+    assert(p2.get_x() === p1.get_x())
+    assert(p2.get_y() === p1.get_y())
+    assert(r2 === r1)
+    assert(lv1.shallowEquals(lv2))
+    assert(av1.shallowEquals(av2))
+  }
+  
   setPosXYZ (x, y, z) {
     this.setPositionArray([x, y])
     return this
@@ -245,6 +317,7 @@
 
   // --- position array ---
 
+  /*
   testPos () {
     const a = [17.638363116197674, 7.483171863743657]
     console.log("before:", a)
@@ -258,21 +331,13 @@
     assert(a[1] === p2.get_y())
     return this
   }
+  */
 
   setPositionArray (a) {
     const r = this.body().GetAngle()
     this.body().SetTransform(new Box2D.b2Vec2(a[0], a[1]), r)
     this.stablizePosition()
     return this
-  }
-
-  stablizePosition () {
-    const p2 = this.body().GetPosition();
-    const r = this.body().GetAngle();
-    this.body().SetTransform(new Box2D.b2Vec2(p2.get_x(), p2.get_y()), r);
-    const p3 = this.body().GetPosition();
-    assert(p3.get_x() === p2.get_x())
-    assert(p3.get_y() === p2.get_y())
   }
 
   positionArray () {
@@ -296,7 +361,13 @@
   // --- linearVelocityArray ---
 
   setLinearVelocityArray (array) {
-    this.body().SetLinearVelocity(array[0], array[1])
+    const v = new Box2D.b2Vec2(array[0], array[1])
+    this.body().SetLinearVelocity(v)
+    const lv = this.body().GetLinearVelocity()
+    //assert(lv.x === array[0])
+    //assert(lv.y === array[1])
+    assert(lv.x === v.x)
+    assert(lv.y === v.y)
     return this
   }
 
@@ -354,7 +425,12 @@
   // --- timeStep ---
 
   timeStep () {
-    if (this.positionArray()[1] < -100) {
+    this.removeIfFallenToFar() 
+  }
+
+  removeIfFallenToFar () {
+    const y = this.positionArray()[1]
+    if (y < -100) {
       this.simEngine().scheduleRemoveThing(this)
     }
   }

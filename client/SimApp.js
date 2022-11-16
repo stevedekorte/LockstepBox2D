@@ -36,7 +36,8 @@
         this.newSlot("channel", null)
 
         // sim hash
-        this.newSerializableSlot("simHashes", null) // time to simHash map 
+        this.newSerializableSlot("simHashesMap", null) // time to simHash map 
+        this.newSlot("simStatesMap", null) // time to stateString map
 
         this.newSlot("rng", null) // RandomNumberGenerator
 
@@ -60,7 +61,8 @@
     init () {
         super.init()
         this.setIsDebugging(true)
-        this.setSimHashes(new Map())
+        this.setSimHashesMap(new Map())
+        this.setSimStatesMap(new Map())
         this.setRng(RandomNumberGenerator.clone())
 
         // users
@@ -73,7 +75,7 @@
     }
 
     setup () {
-        this.setLocalUser(User.clone().setWorld(this))
+        this.setLocalUser(User.clone().setSimApp(this))
         this.addUser(this.localUser())
         this.setElement(document.body)
         //this.element().style.userSelect = "none"
@@ -92,7 +94,7 @@
     }
 
     currentSimHash () {
-        return this.simHashes().get(this.syncTick())
+        return this.simHashesMap().get(this.syncTick())
     }
 
     currentApplySyncTick () {
@@ -101,12 +103,24 @@
     }
 
     applySimHash () {
-        return this.simHashes().get(this.currentApplySyncTick())
+        return this.simHashesMap().get(this.currentApplySyncTick())
+    }
+
+    applySimState () {
+        return this.simStatesMap().get(this.currentApplySyncTick())
     }
 
     updateCurrentSimHash () {
-        this.simHashes().set(this.syncTick(), this.simEngine().simHash())
-        this.simHashes().delete(this.currentApplySyncTick() - 1)
+        const t = this.syncTick()
+        const oldTime = this.currentApplySyncTick() - 1
+        //const h = this.getStateString().simHash()
+        const h = this.simEngine().simHash()
+        this.simHashesMap().set(t, h)
+        this.simHashesMap().delete(oldTime)
+
+        this.simStatesMap().set(t, this.getStateString())
+        this.simStatesMap().delete(oldTime)
+
         return this
     }
 
@@ -239,7 +253,7 @@
         if (clientsSet.size === 1) {
             this.localUser().setHasState(true)
             this.setIsRunning(true)
-            //this.simEngine().addGround()
+            this.simEngine().addGround()
         } else {
             this.requestStateFromAnotherUser()
             // wait for setState
@@ -267,7 +281,7 @@
         if (!existingUser) {
             const user = User.clone()
             user.setClient(aClient)
-            user.setWorld(this)
+            user.setSimApp(this)
             this.queueUserToAdd(user)
             //user.setJoinedAtSyncTick(this.syncTick()+1) // hack
             user.userPointer().setElement(this.element())
@@ -295,8 +309,9 @@
         this.debugLog("removing client " + id)
         if (user) {
             assert(user !== this.localUser())
-            this.debugLog("removing user " + user.id())
+            this.debugLog("removing user " + user.shortId())
             this.usersToAdd().remove(user)
+            assert(this.users().includes(this.localUser()))
             user.willDestroy()
             this.users().remove(user)
             this.doPhase()
@@ -359,34 +374,70 @@
     setStateString (aString) {
         const simApp = this.connection().unserializedValue(aString)
         this.copySerializableSlotsFrom(simApp)
-
         
         const s = this.getStateString()
         if(s !== aString) {
-            const j1 = JSON.parse(aString).slots._simEngine.slots._things.items
-            const j2 = JSON.parse(s).slots._simEngine.slots._things.items
-            if( JSON.stringify(j1) !== JSON.stringify(j2) ) {
-                assert(j1.length === j2.length)
-                for (let i = 0; i < j1.length; i++ ) {
-                    const o1 = j1[i]
-                    const o2 = j2[i]
-                    
-                    const s1 = JSON.stringify(o1)
-                    const s2 = JSON.stringify(o2)
-                    if (s1 !== s2) {
-                        console.log("before:", s1)
-                        console.log(" after:", s2)
-                        //const diff = this.diffStrings(s1, s2)
-                        //console.log("diff:" + diff)
-                        debugger;
-                    }
-                }
-            }
+            this.diffStateStrings(s, aString)
+            throw new Error("state's not equal")
         }
-        
 
         return this
     }
+
+    diffStateStrings (string1, string2) {
+        const j1 = JSON.parse(string1).slots._simEngine.slots._things.items
+        const j2 = JSON.parse(string2).slots._simEngine.slots._things.items
+        if( JSON.stable_stringify(j1) !== JSON.stable_stringify(j2) ) {
+            assert(j1.length === j2.length)
+            for (let i = 0; i < j1.length; i++ ) {
+                const o1 = j1[i]
+                const o2 = j2[i]
+                
+                const s1 = JSON.stable_stringify(o1)
+                const s2 = JSON.stable_stringify(o2)
+                if (s1 !== s2) {
+                    console.log("before:", s1)
+                    console.log(" after:", s2)
+                    //const diff = this.diffStrings(s1, s2)
+                    //console.log("diff:" + diff)
+                    debugger;
+                }
+            }
+        }
+    }
+
+    sendSimHashMismatch () {
+        const rm = RemoteMessage.creationProxy().simHashMismatch(this.localUser().id(), this.applySimHash(), this.currentApplySyncTick(), this.applySimState())
+        this.debugLog("-------------------- BROADCASTING " + rm.description())
+        this.channel().asyncRelayMessageFrom(rm, this.localUser().client()) //.ignoreResponse()
+    }
+
+    onRemoteMessage_simHashMismatch (userId, applySimHash, applySyncTick, stateString) {
+        console.log("onRemoteMessage_simHashMismatch(" + userId +", "+ applySimHash +", t"+ applySyncTick + ", ...)")
+        console.log(" currentApplySyncTick:", this.currentApplySyncTick())
+        console.log("        applySyncTick:", applySyncTick)
+
+        //assert(this.currentApplySyncTick() === applySyncTick)
+        const localStateString = this.simStatesMap().get(applySyncTick)
+        assert(localStateString)
+        this.diffStateStrings(localStateString, stateString)
+
+        //const json1 = JSON.parse(this.getStateString())
+        //const json2 = JSON.parse(stateString)
+        //this.diffJson(json1, json2)
+        debugger;
+    }
+
+    /*
+    diffJson (j1, j2) {
+        // items can be Object, Array, number, string, boolean, null, (undefined, NaN, ?)
+        const t1 = typeof(j1)
+        const t2 = typeof(j2)
+        if (t1 !== t2) {
+
+        }
+    }
+    */
 
     // --- syncing state ---
 
@@ -424,25 +475,25 @@
     sendStateToClientId (id) {
         this.debugLog(" sendStateToClient(" + id + ") on syncTick: " + this.syncTick())
         const newUser = this.userForId(id)
-        assert(newUser)
         if (newUser) {
             const client = newUser.client()
-            const rm = RemoteMessage.creationProxy().setStateAtSyncTick(this.getStateString(), this.syncTick(), this.simTick())
+            const rm = RemoteMessage.creationProxy().setStateAtSyncTick(this.getStateString(), this.syncTick(), this.currentSimHash())
             client.asyncReceiveMessage(rm).ignoreResponse()
+
+            //this.users().forEach(user => user.sharePosition()) // TODO: only send to new client 
+            this.users().forEach(user => {
+                if (user !== newUser) {
+                    user.onNewUserStateRequest(newUser) // receivers will send mouse positions to newUser
+                }
+            })
         } else {
             this.debugLog("newUser '" + id + "' removed before accepting response to state request")
         }
 
-        //this.users().forEach(user => user.sharePosition()) // TODO: only send to new client 
-        this.users().forEach(user => {
-            if (user !== newUser) {
-                user.onNewUserStateRequest(newUser) // will send mouse positions
-            }
-        })
         this.doPhase()
     }
 
-    onRemoteMessage_setStateAtSyncTick (stateString, syncTick, newSimTick) {
+    onRemoteMessage_setStateAtSyncTick (stateString, syncTick, simHash) {
         this.debugLog(this.localUser().shortId() + " onRemoteMessage_setStateAtSyncTick(" + syncTick + ")")
 
         this.setStateString(stateString)
@@ -454,6 +505,17 @@
         this.debugLog("this.localUser().setJoinedAtSyncTick(" + this.localUser().joinedAtSyncTick() + ")")
 
         this.updateCurrentSimHash()
+        if (simHash !== this.currentSimHash()) {
+            console.log("       simHash:", simHash)
+            console.log("currentSimHash:", this.currentSimHash())
+            console.log("   stateString:" + stateString)
+            console.log("getStateString:" + this.getStateString())
+            debugger;
+            this.diffStateStrings(stateString, this.getStateString())
+            this.updateCurrentSimHash()
+            this.currentSimHash()
+            //throw new Error("hash mismatch")
+        }
         this.broadcastHasState()
 
         assert(!this.isRunning())
@@ -480,12 +542,13 @@
     }
 
     onRemoteMessage_userHasStateForSyncTick(userId, syncTick) {
-        this.debugLog(" RECEIVED onRemoteMessage_userHasStateForSyncTick(" + userId + ", " + syncTick + ")")
         const user = this.userForId(userId)
         
         if (user) {
+            this.debugLog(" RECEIVED onRemoteMessage_userHasStateForSyncTick(" + user.shortId() + ", " + syncTick + ")")
             user.setHasState(true)
             user.setJoinedAtSyncTick(syncTick)
+            //this.localUser().sendActionGroupToUserOnSyncTick(user, syncTick)
         } else {
             this.debugLog("no user found for onRemoteMessage_userHasState " + userId)
             debugger
@@ -573,10 +636,34 @@
     }
 
     onSyncTick () {
-        //this.debugLog(".onSyncTick() -------------------------------")
         assert(this.isInTimeStep())
 
+        this.simEngine().stablize()
         this.updateCurrentSimHash()
+        this.localUser().prepareActionGroup() // pack up actions into group for this tick
+
+        if (this.users().length > 1) {
+            this.debugLog("--- onSyncTick currentApplySyncTick: " + this.currentApplySyncTick() + " ---")
+            this.debugLog("  simHashes:")
+            this.simHashesMap().forEach((v, k) => {
+                this.debugLog("  - " + k  + ": " + v)
+            })
+
+            this.debugLog("  users:")
+            this.users().forEach(user => {
+                this.debugLog("  - " + user.summary())
+            })
+
+            if (this.usersToAdd().length) {
+                this.debugLog("  usersToAdd:")
+
+                this.usersToAdd().forEach(user => {
+                    this.debugLog("   - " + user.summary())
+                })
+            }
+
+        }
+
         this.localUser().onSyncTick() // sends pointer update
         this.startUsersTimeout()
         this.setAndDoPhase("syncUsersPhase")
@@ -715,7 +802,6 @@
             this.userForId(ag.clientId())
         }
     } 
-
 
     // --- wait-on-users-input timeout --- 
 

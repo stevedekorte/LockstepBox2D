@@ -120,10 +120,11 @@
     box.setAngleDegrees(0)
     box.create()
   }
-
   */
 
+
   addBoxThing () {
+    debugger;
     const thing = BoxThing.clone().setSimEngine(this)
     thing.pickDimensions()
     thing.setup()
@@ -133,12 +134,13 @@
 
   addGround () {
     const thing = BoxThing.clone().setSimEngine(this)
+    thing.setIsStatic(true)
     thing.setLabel("ground")
     thing.setTexturePath("client/resources/images/cube3.jpg")
     thing.setMass(0)
     thing.setWidth(10)
-    thing.setHeight(0.2)
-    thing.setDepth(10)
+    thing.setHeight(3)
+    thing.setDepth(0.1)
     thing.setup()
     thing.setPosXYZ(0, -10, 0)
     this.scheduleAddThing(thing)
@@ -164,6 +166,12 @@
       this.addBoxThing()
     }
     */
+  }
+
+  stablize () {
+    this.things().forEach(thing => {
+      thing.stablize()
+    })
   }
 
   timeStepPhysics () {

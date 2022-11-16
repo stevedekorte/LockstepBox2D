@@ -7,6 +7,7 @@ class Boot extends Object {
       "shared/Base/getGlobalThis.js",
       "shared/Base/Base.js",
       "shared/Base/Type.js",
+      "shared/Base/StableStringify.js",
 
       "shared/libs/Box2D/Box2D_v2.2.1_min.js",
       //"shared/libs/Ammo/AmmoFormatted.js",

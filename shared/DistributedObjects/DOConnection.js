@@ -252,7 +252,7 @@
 
     serializedValue (aValue) {
         const json = aValue.asJson(new Set(), this)
-        const aString = JSON.stringify(json)
+        const aString = JSON.stable_stringify(json)
         return aString
     }
 

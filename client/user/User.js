@@ -8,7 +8,7 @@
 
 (class User extends Serializable {
     initPrototype () {
-        this.newSlot("world", null)
+        this.newSlot("simApp", null)
         this.newSlot("client", null)
         this.newSlot("userPointer", null)
         this.newSlot("actions", null)
@@ -27,14 +27,14 @@
     }
 
     isLocal () {
-        return this.world().localUser() === this
+        return this.simApp().localUser() === this
     }
 
     shortId () {
         const s = this.id()
         const short = s.slice(s.length - 3)
-        const tag = this.isLocal() ? "local" : ""
-        return tag + "usr" + short
+        const tag = this.isLocal() ? "local_" : ""
+        return tag + "u" + short
     }
 
     getName () {
@@ -62,18 +62,18 @@
 
     
     deleteOldActionGroups () {
-        const t = this.world().syncTick() - this.world().actionOffset() - 2
+        const t = this.simApp().syncTick() - this.simApp().actionOffset() - 2
         const ags = this.actionGroups()
         const ag = ags.get(t)
         if (ag) {
-            this.debugLog("-- deleted " + ag.shortId() + " ")
+            //this.debugLog("-- deleted " + ag.shortId() + " ")
             this.actionGroups().delete(t)
         }
     }
     
     /*
     deleteOldActionGroups () {
-        const old = this.world().syncTick() - this.world().actionOffset() - 1
+        const old = this.simApp().syncTick() - this.simApp().actionOffset() - 1
         const map = this.actionGroups()
         Array.from(map.keys()).forEach(key => {
             if (key < old) {
@@ -88,38 +88,51 @@
     }
 
     prepareActionGroup () {
-        const hash = this.world().currentSimHash()
-        const ag = ActionGroup.clone()
-        ag.setClientId(this.id())
-        ag.setSyncTick(this.world().syncTick())
-        ag.setHash(hash)
-        ag.setActions(this.actions())
-        this.setActions([])
-        return ag
+        const t = this.simApp().syncTick()
+        if (!this.actionGroups().has(t)) {
+            const hash = this.simApp().currentSimHash()
+            const ag = ActionGroup.clone()
+            ag.setClientId(this.id())
+            ag.setSyncTick(t)
+            ag.setHash(hash)
+            ag.setActions(this.actions())
+            this.setActions([])
+            this.receiveActionGroup(ag)
+        }
     }
 
     currentSendActionGroup () {
-        const t = this.world().syncTick()
+        const t = this.simApp().syncTick()
         return this.actionGroupForTick(t)
     }
 
     sendActionGroup () {
         //  We send T action group but will apply (T - actionOffset) actionGroup
-        const ag = this.prepareActionGroup()
-        this.receiveActionGroup(ag)
+        const t = this.simApp().syncTick()
+        this.prepareActionGroup()
+        const ag = this.actionGroups().get(t)
         //this.debugLog(">> sent " + ag.shortId())
         //const ag = this.currentSendActionGroup()
-        //if (this.world().users().length > 1) {
+        //if (this.simApp().users().length > 1) {
         //}
         const rm = RemoteMessage.creationProxy().addActionGroup(ag)
-        this.world().channel().asyncRelayMessageFrom(rm, this.client()) //.ignoreResponse()
-        assert (this.actionGroups().has(this.world().syncTick()))
+        this.simApp().channel().asyncRelayMessageFrom(rm, this.client()) //.ignoreResponse()
 
+        assert(this.actionGroups().has(t))
     }
+
+    /*
+    sendActionGroupToUserOnSyncTick (user, syncTick) {
+        const ag = this.actionGroups().get(syncTick)
+        assert(ag)
+        const rm = RemoteMessage.creationProxy().addActionGroup(ag)
+        user.client().distantObjectForProxy().asyncReceiveMessage(rm)
+    }
+    */
 
     receiveActionGroup (ag) {
         if (!this.isLocal()) {
-            this.debugLog("<< received " + ag.shortId())
+            this.debugLog("<< received " + ag.shortId() + " :: " + this.summary())
         }
         const t = ag.syncTick()
         //assert(!this.actionGroups().has(t)) // it might have it after setState
@@ -127,11 +140,12 @@
       //      debugger;
         }
         this.actionGroups().set(t, ag)
-        this.debugLog(this.summary())
+        //this.debugLog(this.summary())
         return this
     }
 
     onNewUserStateRequest (user) {
+        // have to be carefull - if we add user before preparing current action group, it won't get sent?
         this.debugLog(".onNewUser(" + user.shortId() + ")")
         // send any action groups we have
         //this.debugLog("sending " + this.actionGroups().size + " ag")
@@ -163,7 +177,7 @@
     }
 
     currentApplySyncTick () {
-        return this.world().currentApplySyncTick()
+        return this.simApp().currentApplySyncTick()
     }
 
     currentApplyActionGroup () {
@@ -175,21 +189,27 @@
             return false
         }
 
-        if (this.world().syncTick() > this.joinedAtSyncTick() + this.world().actionOffset()) {
+        if (this.simApp().syncTick() >= this.firstAppliableSyncTick()) {
             return true
         }
         return false
     }
 
+    firstAppliableSyncTick () {
+        return this.joinedAtSyncTick() + this.simApp().actionOffset() + 1
+    }
+
+    /*
     canHaveLocalUserActionGroup () {
-        if (this.world().syncTick() > this.world().localUser().joinedAtSyncTick() + this.world().actionOffset()) {
+        if (this.simApp().syncTick() >= this.simApp().localUser().joinedAtSyncTick() + this.simApp().actionOffset() + 1) {
             return true
         }
         return false
     }
+    */
 
     applyActionGroup () {
-        if (!this.world().isRunning()) {
+        if (!this.simApp().isRunning()) {
             return
         }
 
@@ -200,56 +220,61 @@
 
         const ag = this.currentApplyActionGroup()
         assert(ag)
-        const hash = this.world().applySimHash()
+        const hash = this.simApp().applySimHash()
 
-        if (this.canHaveLocalUserActionGroup()) {
+        //if (this.canHaveLocalUserActionGroup()) {
             assert(this.currentApplySyncTick() === ag.syncTick())
 
             if (hash === null || hash === undefined) {
-                console.warn("local simHash is missing (" + hash + ") for syncTick " + ag.syncTick())
-                console.warn("              syncTick:" + this.world().syncTick())
-                console.warn("  currentApplySyncTick:" + this.currentApplySyncTick())
-                console.warn("      joinedAtSyncTick:" + this.joinedAtSyncTick())
+                this.debugLog("local simHash is missing (" + hash + ") for syncTick " + ag.syncTick())
+                this.debugLog("              syncTick:" + this.simApp().syncTick())
+                this.debugLog("  currentApplySyncTick:" + this.currentApplySyncTick())
+                this.debugLog("      joinedAtSyncTick:" + this.joinedAtSyncTick())
                 debugger;
-                this.world().applySimHash()
                 throw new Error("simHash is missing")
             }
-        }
+        //}
 
         if (hash !== ag.hash()) {
-            this.debugLog("ERROR: simHashes don't match on tick " + this.world().syncTick() + " local " + hash + " !== other " + ag.hash())
-            //throw new Error("simHashes don't match")
+            this.debugLog("ERROR: applying " + ag.shortId())
+            this.debugLog("ERROR: simHashes don't match on apply tick " + ag.syncTick() + " local " + hash + " !== other " + ag.hash())
+            const s = this.simApp().getStateString()
+            this.simApp().sendSimHashMismatch()
+            console.warn("simHashes don't match")
+        //    throw new Error("simHashes don't match")
           //  debugger;
         }
 
         const actions = ag.actions()
         actions.forEach(rm => rm.sendTo(this))
         this.deleteOldActionGroups()
-        this.debugLog("currently " + this.actionGroups().size + " action groups")
+        //this.debugLog("currently " + this.actionGroups().size + " action groups")
     }
+
 
     // --- mouse down ---
 
     onMouseDown (event) {
-        const thing = BoxThing.clone().setSimEngine(this.world().simEngine())
+        const thing = BoxThing.clone().setSimEngine(this.simApp().simEngine())
         thing.pickDimensions()
-        thing.setup()
+        //thing.setup()
         thing.pickPosition()
+        thing.pickVelocity()
 
-        const rm = RemoteMessage.creationProxy().addThingString(JSON.stringify(thing.asJson()))
+        const rm = RemoteMessage.creationProxy().addThingString(JSON.stable_stringify(thing.asJson()))
         this.addAction(rm)
         event.stopPropagation()
     }
 
     onRemoteMessage_addThingString (s) {
         const json = JSON.parse(s)
-        const thing = BoxThing.clone().setSimEngine(this.world().simEngine())
-        thing.fromJson(json, this.world().connection())
+        const thing = BoxThing.clone().setSimEngine(this.simApp().simEngine())
+        thing.fromJson(json, this.simApp().connection())
         
         // need to read dimensions before creating shape
         // need to create body, before setting it's pos, rot, vel, rotVel
 
-        this.world().simEngine().scheduleAddThing(thing)
+        this.simApp().simEngine().scheduleAddThing(thing)
     }
 
     // --- mouse move ---
@@ -275,14 +300,15 @@
     }
 
     debugLog (s) {
-        console.log("t" + this.world().syncTick() + " " + this.type() + " " + s)
+        console.log("t" + this.simApp().syncTick() + " " + this.shortId() + " " + s)
     }
 
     summary () {
         let s = " " + this.shortId() + " "
-        s += " joined: " + this.joinedAtSyncTick()
-        s += " canHaveAgs: " + this.canHaveActionGroup()
-        s += " ags: " + JSON.stringify(Array.from(this.actionGroups().keys())) 
+        s += " joined:" + this.joinedAtSyncTick()
+        s += " canHaveAgs:" + this.canHaveActionGroup()
+        s += " startActionTick:" + this.firstAppliableSyncTick()
+        s += " ags:" + JSON.stable_stringify(Array.from(this.actionGroups().keys())) 
         return s
     }
 

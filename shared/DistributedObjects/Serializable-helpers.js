@@ -64,6 +64,10 @@ Object.defineSlot(Object, "valueFromJson",
             return json
         }
 
+        if (typeof(json) === "boolean") {
+            return json
+        }
+
         if (json === undefined) {
             throw new Error("undefined is not a valid json value")
         }

@@ -188,13 +188,26 @@ Object.defineSlot(Array.prototype, "remove",
     }
 );
 
-
 Object.defineSlot(Array.prototype, "clear",
     function () {
         while (this.length) {
             this.pop()
         }
         return this
+    }
+);
+
+Object.defineSlot(Array.prototype, "shallowEquals",
+    function (other) {
+        if (this.length === other.length) {
+            for (let i = 0; i < this.length; i++) {
+                if (this[i] !== other[i]) {
+                    return false
+                }
+            }
+            return true
+        }
+        return false
     }
 );
 
