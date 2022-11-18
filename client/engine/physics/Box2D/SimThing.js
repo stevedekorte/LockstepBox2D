@@ -1,10 +1,30 @@
 "use strict";
 
+/*
+
+  Notes:
+
+  Problem:
+  
+  Box2d a body's motion state (pos, vel, etc) requires a body exist.
+  Creating a body requires a bodyDef which requires setting if it is static or dynamic.
+  Because of this we need to define things with some ordering rules e.g. we must set isStatic before calling setPosition()
+
+  For creation and serialization, we can manually order these calls, but for for deserialization, we'd like it to be automatic.
+  Also the deserializer currently sets ivars directly instead of calling setters.
+
+  Solution: 
+  
+  Separate the moiton state into another slot and push it to the boby after deserialization.
+
+*/
+
+
 (class SimThing extends Serializable {
 
   initPrototype () {
     this.newSlot("simEngine", null)
-    this.newSlot("label", "?")
+    this.newSerializableSlot("label", "?")
 
     // sim
     this.newSlot("bodyDef", null)
@@ -15,7 +35,7 @@
     this.newSlot("fixture", null)
     this.newSerializableSlot("isStatic", false)
     this.newSerializableSlot("restitution", 1)
-    this.newSerializableSlot("friction", 0)
+    this.newSerializableSlot("friction", 0.1)
 
     // view
     this.newSlot("material", null)
@@ -24,7 +44,7 @@
     this.newSlot("mesh", null)
     this.newSlot("sceneObject", null)
 
-    this.newSerializableSlot("motionStateMap", null) // calc for serialization, apply after deserialization
+    this.newSerializableSlot("motionState", null) // calc for serialization, apply after deserialization
     this.newSerializableSlot("age", 0) 
   }
 
@@ -33,66 +53,39 @@
     return this
   }
 
-  setupDefaultMotionStateMap () {
-    let m = this.motionStateMap()
-    if (!m) {
-      m = new Map()
-      m.set("positionArray", [0, 0])
-      m.set("rotationArray", [0])
-      m.set("linearVelocityArray", [0, 0])
-      m.set("angularVelocityArray", [0])
-      this.setMotionStateMap(m)
-    }
-    return m
+  verifyMotionStateMatchesBody () {
+    assert(this.motionState().isSameAs(this))
   }
 
-  calcMotionStateMap () {
-    const m = new Map()
-    m.set("positionArray", this.positionArray())
-    m.set("rotationArray", this.rotationArray())
-    m.set("linearVelocityArray", this.linearVelocityArray())
-    m.set("angularVelocityArray", this.angularVelocityArray())
-    this.setMotionStateMap(m)
+  pullMotionStateFromBody () {
+    this.motionState().copyFrom(this)
     return this
   }
 
-  applyMotionStateMapIfPresent () {
-    const m = this.motionStateMap()
-    if (m) {
-      this.setPositionArray(m.get("positionArray"))
-      this.setRotationArray(m.get("rotationArray"))
-      this.setLinearVelocityArray(m.get("linearVelocityArray"))
-      this.setAngularVelocityArray(m.get("angularVelocityArray"))
-      this.setMotionStateMap(null)
-    }
+  pushMotionStateToBody () {
+    this.motionState().copyTo(this)
     return this
   }
 
   asJson (loopCheck, refCreater) {
-    // calc motion state slot, so it can be serialized
-    if (!this.motionStateMap()) {
-      this.calcMotionStateMap()
+    if (this.body()) {
+      this.pullMotionStateFromBody()
     }
     return super.asJson(loopCheck, refCreater)
   }
 
   fromJson (json, refResolver) {
     const result = super.fromJson(json, refResolver)
-    // update motion state from motion state slot
     this.setup()
-   //this.applyMotionStateMapIfPresent() // have to wait until create if using ammo.js
+    this.pushMotionStateToBody()
     return result
   }
 
   // --- hash ---
 
   simHash () {
-    const m = this.motionStateMap()
-    if (!m) {
-      this.calcMotionStateMap()
-    }
-    const hash = this.motionStateMap().simHash()
-    this.setMotionStateMap(m)
+    this.pullMotionStateFromBody()
+    const hash = this.motionState().simHash()
     return hash
   }
 
@@ -121,6 +114,7 @@
 
   init () {
     super.init()
+    this.setMotionState(SimMotionState.clone())
   }
 
   setup () {
@@ -173,18 +167,22 @@
     fixture.SetFriction(this.friction())
   }
   
+  sleep () {
+    this.body().SetAwake(0);
+    this.body().SetActive(0);
+  }
+  
   awaken () {
     this.body().SetAwake(1);
     this.body().SetActive(1);
   }
 
   addToWorld () {
-    this.applyMotionStateMapIfPresent()
-    // done in setupBody?
     this.awaken();
   }
 
   removeFromWorld () {
+    this.pullMotionStateFromBody()
     const body = this.body()
     this.world().DestroyBody(body);
     this.setBody(null)
@@ -252,7 +250,6 @@
     this.removeFromWorld()
   }
 
-
   // --- update ---
 
   syncViewFromSim () {
@@ -272,13 +269,6 @@
   // --- stablize ---
 
   stablize () {
-    this.stablizePosition()
-    //this.stablizeRotation()
-  }
-
-  // --- position ---
-
-  stablizePosition () {
     {
       const lv1 = this.linearVelocityArray()
       this.setLinearVelocityArray(lv1)
@@ -288,27 +278,38 @@
       }
     }
 
-    const p1 = this.body().GetPosition();
-    const r1 = this.body().GetAngle();
-    const lv1 = this.linearVelocityArray()
-    const av1 = this.angularVelocityArray()
+    {
+      const p1 = this.body().GetPosition();
+      const r1 = this.body().GetAngle();
+      const lv1 = this.linearVelocityArray()
+      const av1 = this.angularVelocityArray()
 
-    this.body().SetTransform(new Box2D.b2Vec2(p1.get_x(), p1.get_y()), r1);
-    this.setLinearVelocityArray(lv1)
-    this.setAngularVelocityArray(av1)
-    
-    const p2 = this.body().GetPosition();
-    const r2 = this.body().GetAngle();
-    const lv2 = this.linearVelocityArray()
-    const av2 = this.angularVelocityArray()
+      this.body().SetTransform(new Box2D.b2Vec2(p1.get_x(), p1.get_y()), r1);
+      this.setLinearVelocityArray(lv1)
+      this.setAngularVelocityArray(av1)
+      
+      const p2 = this.body().GetPosition();
+      const r2 = this.body().GetAngle();
+      const lv2 = this.linearVelocityArray()
+      const av2 = this.angularVelocityArray()
 
-    // verify
-    assert(p2.get_x() === p1.get_x())
-    assert(p2.get_y() === p1.get_y())
-    assert(r2 === r1)
-    assert(lv1.shallowEquals(lv2))
-    assert(av1.shallowEquals(av2))
+      // verify
+      assert(p2.get_x() === p1.get_x())
+      assert(p2.get_y() === p1.get_y())
+      assert(r2 === r1)
+      assert(lv1.shallowEquals(lv2))
+      assert(av1.shallowEquals(av2))
+    }
+
+    this.pullMotionStateFromBody()
+    const dup = this.motionState().duplicate()
+    this.pushMotionStateToBody()
+    this.pullMotionStateFromBody()
+    dup.assertEquals(this.motionState())
+    //dup.assertJsonEquals(this.motionState())
   }
+
+  // --- position ---
   
   setPosXYZ (x, y, z) {
     this.setPositionArray([x, y])
@@ -336,7 +337,7 @@
   setPositionArray (a) {
     const r = this.body().GetAngle()
     this.body().SetTransform(new Box2D.b2Vec2(a[0], a[1]), r)
-    this.stablizePosition()
+    //this.stablize()
     return this
   }
 
@@ -425,6 +426,12 @@
   // --- timeStep ---
 
   timeStep () {
+    /*
+    if (this.label() !== "ground") {
+      console.log(this.positionArray())
+    }
+    */
+    //this.awaken()
     this.removeIfFallenToFar() 
   }
 

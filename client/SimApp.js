@@ -112,6 +112,8 @@
 
     updateCurrentSimHash () {
         const t = this.syncTick()
+        assert(!this.simHashesMap().has(t))
+
         const oldTime = this.currentApplySyncTick() - 1
         //const h = this.getStateString().simHash()
         const h = this.simEngine().simHash()
@@ -125,30 +127,6 @@
     }
 
     // --- run ---
-
-    showBasis(b) {
-        let s = "["
-        for (let i = 0; i < 3; i++) {
-            const row = b.getRow(i)
-            s += "[" + row.x() + ", " + row.y() + ", " + row.z() + "]"
-        }
-        s += "]"
-        console.log("basis: ", s)
-    }
-
-    truncateNum (n) {
-        const digits = 8
-        const pow = Math.pow(10, digits)
-        const result = Math.floor(n * pow) / pow
-        return result
-    }
-
-    truncateArray (array) {
-        for (let i = 0; i < array.length; i++) {
-            array[i] = this.truncateNum(array[i])
-        }
-        return array
-    }
 
     test () {
 
@@ -328,7 +306,7 @@
         })
     }
 
-    processedAllUserChanges () {
+    hasProcessedAllUserChanges () {
         return this.usersToAdd().length === 0
     }
 
@@ -371,6 +349,13 @@
         return "";
     }
 
+    verifyStateString () {
+        const s1 = this.getStateString()
+        this.setStateString(s1)
+        const s2 = this.getStateString()
+        assert(s1 === s2)
+    }
+
     setStateString (aString) {
         const simApp = this.connection().unserializedValue(aString)
         this.copySerializableSlotsFrom(simApp)
@@ -396,8 +381,10 @@
                 const s1 = JSON.stable_stringify(o1)
                 const s2 = JSON.stable_stringify(o2)
                 if (s1 !== s2) {
-                    console.log("before:", s1)
-                    console.log(" after:", s2)
+                    console.log("before:")
+                    console.log(s1)
+                    console.log(" after:")
+                    console.log(s2)
                     //const diff = this.diffStrings(s1, s2)
                     //console.log("diff:" + diff)
                     debugger;
@@ -421,23 +408,8 @@
         const localStateString = this.simStatesMap().get(applySyncTick)
         assert(localStateString)
         this.diffStateStrings(localStateString, stateString)
-
-        //const json1 = JSON.parse(this.getStateString())
-        //const json2 = JSON.parse(stateString)
-        //this.diffJson(json1, json2)
         debugger;
     }
-
-    /*
-    diffJson (j1, j2) {
-        // items can be Object, Array, number, string, boolean, null, (undefined, NaN, ?)
-        const t1 = typeof(j1)
-        const t2 = typeof(j2)
-        if (t1 !== t2) {
-
-        }
-    }
-    */
 
     // --- syncing state ---
 
@@ -494,7 +466,7 @@
     }
 
     onRemoteMessage_setStateAtSyncTick (stateString, syncTick, simHash) {
-        this.debugLog(this.localUser().shortId() + " onRemoteMessage_setStateAtSyncTick(" + syncTick + ")")
+        this.debugLog(this.localUser().shortId() + " onRemoteMessage_setStateAtSyncTick(state, " + syncTick + ", " + simHash + ")")
 
         this.setStateString(stateString)
         this.setSimTick(syncTick * this.simTicksPerSyncTick())
@@ -503,17 +475,17 @@
         this.localUser().setHasState(true)
         this.localUser().setJoinedAtSyncTick(syncTick)
         this.debugLog("this.localUser().setJoinedAtSyncTick(" + this.localUser().joinedAtSyncTick() + ")")
+        //this.processUserChanges() //  do we need this here?
 
-        this.updateCurrentSimHash()
-        if (simHash !== this.currentSimHash()) {
+        const calcedSimHash = this.simEngine().simHash()
+
+        if (simHash !== calcedSimHash) {
             console.log("       simHash:", simHash)
-            console.log("currentSimHash:", this.currentSimHash())
+            console.log(" calcedSimHash:", calcedSimHash)
             console.log("   stateString:" + stateString)
             console.log("getStateString:" + this.getStateString())
             debugger;
             this.diffStateStrings(stateString, this.getStateString())
-            this.updateCurrentSimHash()
-            this.currentSimHash()
             //throw new Error("hash mismatch")
         }
         this.broadcastHasState()
@@ -594,11 +566,6 @@
             this.lastSimTickDate(Date.now())
             this.timeStep()
         }
-
-        /*
-        const phaseMethod = this.phase()
-        this[phaseMethod].apply(this)
-        */
     }
 
     timeStep () {
@@ -619,6 +586,10 @@
         assert(this.isInTimeStep())
         this.setSimTick(this.simTick() + 1)
         this.setIsInTimeStep(false)
+        if (this.simTick() % 100 === 0) {
+            console.log("verifyStateString")
+            this.verifyStateString()
+        }
     }
 
     // --- sync tick ---
@@ -635,15 +606,22 @@
         method.apply(this)
     }
 
+    totalUserCount () {
+        return this.users().length + this.usersToAdd().length
+    }
+
     onSyncTick () {
+        if (this.totalUserCount() > 1) {
+            this.debugLog("=== BEGIN onSyncTick currentApplySyncTick: " + this.currentApplySyncTick() + " ===")
+        }
+
         assert(this.isInTimeStep())
 
         this.simEngine().stablize()
         this.updateCurrentSimHash()
         this.localUser().prepareActionGroup() // pack up actions into group for this tick
 
-        if (this.users().length > 1) {
-            this.debugLog("--- onSyncTick currentApplySyncTick: " + this.currentApplySyncTick() + " ---")
+        if (this.totalUserCount() > 1) {
             this.debugLog("  simHashes:")
             this.simHashesMap().forEach((v, k) => {
                 this.debugLog("  - " + k  + ": " + v)
@@ -685,7 +663,7 @@
 
         // we only add a user after getting it's hasState, 
         // user only sends it after being added and requesting, and receiving it
-        if (this.processedAllUserChanges()) {
+        if (this.hasProcessedAllUserChanges()) {
             this.localUser().sendActionGroup()
             this.setAndDoPhase("syncActionsPhase")
         }
@@ -712,6 +690,9 @@
             this.clearUsersTimeout()
             this.applyUserActions()
             this.setAndDoPhase("noopPhase")
+            if (this.totalUserCount() > 1) {
+                this.debugLog("=== COMPLETED onSyncTick currentApplySyncTick: " + this.currentApplySyncTick() + " ===")
+            }
             this.onCompleteTimeStep()
         }
     }
@@ -762,7 +743,7 @@
     // -------------------
 
     onRemoteMessage_addActionGroup (ag) {
-        this.debugLog("onRemoteMessage_addActionGroup(" + ag.shortId() + ")")
+        //this.debugLog("onRemoteMessage_addActionGroup(" + ag.shortId() + ")")
         const q = this.actionGroupQueue()
         q.push(ag)
         this.doPhase()

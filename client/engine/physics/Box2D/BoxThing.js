@@ -8,6 +8,10 @@
     this.newSerializableSlot("depth", 0.1)
   }
 
+  dimensionsArray () {
+    return [this.width(), this.height(), this.depth()]
+  }
+
   init () {
     super.init()
     //this.setShapeClass(Box2D.b2BodyDef)
@@ -31,40 +35,30 @@
     return this
   }
 
+  randomInRange (x1, x2, digits = 2) {
+    assert(x1 <= x2)
+    const v = x1 + ((x2 - x1) * Math.random())
+    const p = Math.pow(10, digits)
+    const r = Math.floor(v*p)/p
+    return r
+  }
+
   pickPosition () {
     const s = 3
-    const x = s*(Math.random() - 0.5)*2;
-    const y = 10 + s*(Math.random() - 0.5)*2;
-    //const z = s*(Math.random() - 0.5)*2;
-
-    const m = this.setupDefaultMotionStateMap()
-    m.set("positionArray", [x, y])
-
-    //this.setRotationArray([1, 0, 0, 1])
+    const x = this.randomInRange(-s, s);
+    const y = 10 + this.randomInRange(-s, s);
+    this.motionState().setPositionArray([x, y])
     return this
   }
 
   pickVelocity () {
-    const s = 0.1
-    const vx = s*(Math.random() - 0.5)*2;
-    const vy = s*(Math.random() - 0.5)*2;
-    //this.setLinearVelocityArray([vx, vy])
+    const s = 3
+    const vx = this.randomInRange(-s, s);
+    const vy = this.randomInRange(-s, s);
+    this.motionState().setLinearVelocityArray([vx, vy])
 
-    const av = s*(Math.random() - 0.5)*2;
-    //this.setAngularVelocityArray([av])
-
-    const m = this.setupDefaultMotionStateMap()
-    m.set("linearVelocityArray", [vx, vy])
-    m.set("angularVelocityArray", [av])
-  }
-
-  // --- setup ---
-
-  setupSimBody () {
-    this.setupShape()
-    this.setupBodyDef()
-    this.setupBody()
-    this.setupFixture()
+    const av = this.randomInRange(-s, s);
+    this.motionState().setAngularVelocityArray([av])
   }
 
   // --- setup sim ---
@@ -80,7 +74,7 @@
   setupMesh () {
     const s = this.textureScale()
     const mesh = new CubicVR.primitives.box({
-      size: [this.width(), this.height(), this.depth()],
+      size: this.dimensionsArray(),
       material: this.material(),
       uvmapper: this.uvMapper()
     }).calcNormals().triangulateQuads().compile().clean();

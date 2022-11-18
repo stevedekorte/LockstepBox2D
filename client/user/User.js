@@ -33,7 +33,7 @@
     shortId () {
         const s = this.id()
         const short = s.slice(s.length - 3)
-        const tag = this.isLocal() ? "local_" : ""
+        const tag = this.isLocal() ? "local__" : "remote_"
         return tag + "u" + short
     }
 
@@ -98,6 +98,8 @@
             ag.setActions(this.actions())
             this.setActions([])
             this.receiveActionGroup(ag)
+        } else {
+            debugger;
         }
     }
 
@@ -109,12 +111,12 @@
     sendActionGroup () {
         //  We send T action group but will apply (T - actionOffset) actionGroup
         const t = this.simApp().syncTick()
-        this.prepareActionGroup()
+        assert(this.actionGroups().has(t)) // prepareActionGroup should have already been called at start of onSyncTick
+        //this.prepareActionGroup()
         const ag = this.actionGroups().get(t)
-        //this.debugLog(">> sent " + ag.shortId())
-        //const ag = this.currentSendActionGroup()
-        //if (this.simApp().users().length > 1) {
-        //}
+        if (this.simApp().users().length > 1) {
+            this.debugLog(">> SENDING " + ag.shortId())
+        }
         const rm = RemoteMessage.creationProxy().addActionGroup(ag)
         this.simApp().channel().asyncRelayMessageFrom(rm, this.client()) //.ignoreResponse()
 
@@ -132,7 +134,7 @@
 
     receiveActionGroup (ag) {
         if (!this.isLocal()) {
-            this.debugLog("<< received " + ag.shortId() + " :: " + this.summary())
+            this.debugLog("<< RECEIVED " + ag.shortId() + " :: " + this.summary())
         }
         const t = ag.syncTick()
         //assert(!this.actionGroups().has(t)) // it might have it after setState
@@ -251,15 +253,24 @@
         //this.debugLog("currently " + this.actionGroups().size + " action groups")
     }
 
-
     // --- mouse down ---
 
     onMouseDown (event) {
+        const p = this.userPointer().position()
+        const x = (p.x() - window.innerWidth/2)/20 // quick hack - move to 2d drawing later and fix this
+        const y = (window.innerHeight/2 - p.y())/20
+        const pa = [x, y]
+        //console.log("place: ", pa)
+
         const thing = BoxThing.clone().setSimEngine(this.simApp().simEngine())
         thing.pickDimensions()
-        //thing.setup()
-        thing.pickPosition()
+        thing.setup()
+        //thing.pickPosition()
+        thing.setPositionArray(pa)
         thing.pickVelocity()
+        //thing.pushMotionStateToBody()
+        thing.stablize()
+        thing.destroy()
 
         const rm = RemoteMessage.creationProxy().addThingString(JSON.stable_stringify(thing.asJson()))
         this.addAction(rm)

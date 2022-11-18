@@ -29,7 +29,7 @@
   }
 
   setup () {  
-    //console.log(this.type() + ".setup()")
+    console.log(this.type() + ".setup() =====================================================================================")
     this.setPhysicsEngine(PhysicsEngine.clone().setup()) 
     this.setGraphicsEngine(GraphicsEngine.clone().setup().setApp(this)) 
     //this.addBoxThing()
@@ -38,14 +38,21 @@
 
   // --- things ---
 
-  setNewThings (newThings) {
+  removeAllThingsNow () {
     if (this._things) {
       this.things().forEach(thing => this.scheduleRemoveThing(thing))
       this.processRemoveQueue()
     }
+  }
 
+  addThingsNow (newThings) {
     newThings.forEach(thing => this.scheduleAddThing(thing))
     this.processAddQueue()
+  }
+
+  setNewThings (newThings) {
+    this.removeAllThingsNow()
+    this.addThingsNow(newThings)
     return this
   }
 

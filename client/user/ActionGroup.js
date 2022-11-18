@@ -28,7 +28,7 @@
     shortId () {
         const user = app.userForId(this.clientId())
         const userId = user ? user.shortId() : "usr?"
-        return userId + "_ag" + this.syncTick()
+        return userId + "_ag" + this.syncTick() + "_" + this.hash()
     }
 
 }.initThisClass());

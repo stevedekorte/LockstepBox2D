@@ -32,6 +32,7 @@ class Boot extends Object {
       "client/engine/SimEngine.js",
       "client/engine/GraphicsEngine.js",
       "client/engine/physics/Box2D/PhysicsEngine.js",
+      "client/engine/physics/Box2D/SimMotionState.js",
       "client/engine/physics/Box2D/SimThing.js",
       "client/engine/physics/Box2D/BoxThing.js",
       //"client/engine/physics/Box2D/CircleThing.js",
