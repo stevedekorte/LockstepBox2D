@@ -18,18 +18,18 @@ and that at each synchronization step that all clients:
 
 To minimize synchronization communications, the clients use the input messages as their signal that they are ready to proceed to the next step. Each client shares it's action (after having processed changes to the user set and handling requests for the current state from new clients).
 
-### tricks
+### Tricks
 
-#### smoother animation via multiple simTicks between syncTicks
+#### Smoother animation via multiple simTicks between syncTicks
 To keep the simulation running at a high frame rate, a number of simulation steps (each doing a frame render) are carried out between each input syncing step. This ratio is currently fixed to a number which is reasonable for typical use cases, but could be dynamically optimized. In the code, the simulation steps are called "simTicks" and the synchronization steps (points) a called "syncTicks".
 
-#### avoid jitter by delaying user inputs
+#### Avoid jitter by delaying user inputs
 The current code applies the inputs taken between syncStep T and T+1 to the simulation at the start of T+2. Shifting the inputs allows more time for the inputs to arrive, which reduces the chance of having to pause the simualtion (producing noticeable jitter) while waiting on inputs though at the cost of some (less noticeable) input lag. 
 
-#### don't sync non simultation things
+#### Don't sync non simultation things
 The mouse position of the local user is shared periodically (if it's changed) with other users. As this doesn't effect the simulation itself, it doesn't need to be synchronized with it.
 
-#### verify sync
+#### Verify syncs
 To ensure client states are in sync, a hash of the state of the simulation is shared with the user inputs message and verified when applied.
 
 ## How to develop and run locally
