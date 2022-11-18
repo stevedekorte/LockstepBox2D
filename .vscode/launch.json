@@ -10,6 +10,20 @@
             "name": "Launch Chrome against localhost",
             "url": "http://localhost:8000/index.html",
             "webRoot": "${workspaceFolder}"
-        }
+        },
+
+
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "chrome: open ddns client page",
+            "url": "http://z7762064.eero.online:8000/index.html", // use HTTP as HTTPS has cert issues for DDNS
+            "webRoot": "${workspaceFolder}",
+            "runtimeArgs": [
+                "--disable-web-security"
+            ],
+            "enableContentValidation": false,
+            "sourceMaps": true
+        },
     ]
 }

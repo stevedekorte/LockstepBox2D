@@ -243,8 +243,8 @@
             const s = this.simApp().getStateString()
             this.simApp().sendSimHashMismatch()
             console.warn("simHashes don't match")
-        //    throw new Error("simHashes don't match")
-          //  debugger;
+            // throw new Error("simHashes don't match")
+            // debugger;
         }
 
         const actions = ag.actions()

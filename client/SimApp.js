@@ -586,10 +586,12 @@
         assert(this.isInTimeStep())
         this.setSimTick(this.simTick() + 1)
         this.setIsInTimeStep(false)
+        /*
         if (this.simTick() % 100 === 0) {
             console.log("verifyStateString")
             this.verifyStateString()
         }
+        */
     }
 
     // --- sync tick ---
