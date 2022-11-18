@@ -8,15 +8,15 @@ In this demo, multiple users can open a url to a Javascript demo where the user 
 
 Clients run the simulation in lockstep, share user inputs between clients via the relay server, and apply the inputs at the same time steps.
 
-To ensure the simulation produces the same state on each client, clients need to:
+To do this, clients need to:
 - ensure that they start with the same state (whenever a client joins the simulation) 
 
-and that at each synchronization step that all clients:
+and on each synch step:
 - agree on current set of clients
 - have all inputs to be applied to the next step
 - apply inputs in the same order
 
-To minimize synchronization communications, the clients use the input messages as their signal that they are ready to proceed to the next step. Each client shares it's action (after having processed changes to the user set and handling requests for the current state from new clients).
+To minimize synch communications, the clients use their input message (called an ActionGroup) as their signal that they are ready to proceed to the next step. Each client shares it's action (after having processed changes to the user set and handling requests for the current state from new clients).
 
 ### Tricks
 
@@ -32,9 +32,15 @@ The mouse position of the local user is shared periodically (if it's changed) wi
 #### Verify syncs
 To ensure client states are in sync, a hash of the state of the simulation is shared with the user inputs message and verified when applied.
 
-## How to develop and run locally
 
-##notes
+## Implementation notes
+
+#### Distributed Objects
+
+The communications with the relay server are done using WebSockets, and with a distributed objects library I wrote to use in this project. It deserves it's own documentation, but I haven't written it up yet. Some features include the ability to pass references to local objects which are automatically represented as DistantObject proxies on the other side. This works  between objects on the relay server and clients, as well as between the clients themselves via the messages relayed by the server. Another feature is that remote messages immediately return a DOFuture instance whose value is set after the response message is received, and which supports result, timeout, and error delegate messages. 
+
+
+## How to develop and run locally
 There are two different VSCode run scripts
 
 ## Development & how to develop and run locally
