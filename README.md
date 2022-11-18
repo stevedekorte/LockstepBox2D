@@ -10,6 +10,7 @@ Clients run the simulation in lockstep, share user inputs between clients via th
 
 To ensure the simulation produces the same state on each client, clients need to:
 - ensure that they start with the same state (whenever a client joins the simulation) 
+
 and that at each synchronization step that all clients:
 - agree on current set of clients
 - have all inputs to be applied to the next step
@@ -20,7 +21,7 @@ To minimize synchronization communications, the clients use the input messages a
 ### tricks
 
 #### smoother animation via multiple simTicks between syncTicks
-To keep the simulation running at a high frame rate, a number of simulation steps are carried out between each input syncing step. This ratio is currently fixed to a number which is reasonable for typical use cases, but could be dynamically optimized. In the code, the simulation steps are called "simTicks" and the synchronization steps (points) a called "syncTicks".
+To keep the simulation running at a high frame rate, a number of simulation steps (each doing a frame render) are carried out between each input syncing step. This ratio is currently fixed to a number which is reasonable for typical use cases, but could be dynamically optimized. In the code, the simulation steps are called "simTicks" and the synchronization steps (points) a called "syncTicks".
 
 #### avoid jitter by delaying user inputs
 The current code applies the inputs taken between syncStep T and T+1 to the simulation at the start of T+2. Shifting the inputs allows more time for the inputs to arrive, which reduces the chance of having to pause the simualtion (producing noticeable jitter) while waiting on inputs though at the cost of some (less noticeable) input lag. 
