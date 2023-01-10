@@ -92,21 +92,7 @@
             this.serializeArgs(loopCheck, refCreator)
         }
 
-        /*
-        if (this.methodName() === "addActionGroup") {
-            assert(this.sargs().length !== 0)
-            //console.log("VALID addActionGroup asJson:", JSON.stringify(json, 2, 2))
-            //debugger;
-        }
-        */
-
-        var json = super.asJson(loopCheck, refCreator)
-        
-        /*
-        assert(json.slots._sargs !== "null")
-        assert(json.slots._sargs !== null)
-        */
-
+        const json = super.asJson(loopCheck, refCreator)
         return json
     }
 
@@ -127,7 +113,6 @@
 
     sendTo (target) {
         this.unserializeArgs()
-
 
         if (target.distantObjectForProxy) { 
             // it's a distant target

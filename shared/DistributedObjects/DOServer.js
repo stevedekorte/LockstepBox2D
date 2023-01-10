@@ -14,9 +14,11 @@ const WebSocket = require('ws');
         this.newSlot("rootObject", null);
     }
 
+    /*
     init () {
         super.init()
     }
+    */
 
     newConnectionForWebSocket (webSocket) {
         const conn = DOConnection.clone()

@@ -4,7 +4,9 @@
 /*
     WsServer
 
-
+    Delegte methods:
+    - onConnectionOpen(aConnection)
+    - onConnectionClose(aConnection)
 */
 
 // ---------
@@ -21,6 +23,7 @@ require("../WebSockets/WsConnection.js");
         this.newSlot("webSocketServer", null);
         this.newSlot("connections", null);
         this.newSlot("isSecure", false);
+        this.newSlot("delegate", false);
         //this.newSlot("connectionClass", WsConnection);
     }
 
@@ -100,11 +103,17 @@ require("../WebSockets/WsConnection.js");
 
     onConnection (conn) {
         // for subclasses to override
+        if (this.delegate()) {
+            this.delegate().onConnectionOpen(conn)
+        }
     }
 
-    onConnectionClose (aConnection) { // sent by DOConnection to us as it's delegate
+    onConnectionClose (conn) { // sent by DOConnection to us as it's delegate
         this.debugLog(".onConnectionClose()")
-        this.connections().delete(aConnection)
+        this.connections().delete(conn)
+        if (this.delegate()) {
+            this.delegate().onConnectionClose(conn)
+        }
     }
 
 }.initThisClass());

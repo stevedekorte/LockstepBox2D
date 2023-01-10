@@ -62,7 +62,6 @@
     */
 
     asJson (loopCheck = new Set(), refCreator) {
-
         if (this.doesVendByReference()) {
             assert(refCreator)
             const ref = refCreator.refForLocalObject(this)
@@ -117,6 +116,7 @@
     }
 
     didUnserialize (refResolver) {
+        // this method is just here to be overridden by subclasses
         return this
     }
 
@@ -129,6 +129,7 @@
     }
 
     copySerializableSlotFrom (slotName, obj) {
+        // shallow copy
         const privateName = "_" + slotName
         assert(Reflect.has(this, privateName)) 
         assert(Reflect.has(obj, privateName)) 
@@ -137,12 +138,7 @@
         this[privateName] = newValue
 
         /*
-        const newType = typeof(newValue)
-        if (newType === "string" || newType === "number") {
-            this[privateName] = newValue
-        }
-        */
-        /*
+        // deep copy?
         if (Reflect.has(newValue, "copySerializableSlotsFrom")) {
             assert(Reflect.has(oldValue, "copySerializableSlotsFrom"))
             oldValue.copySerializableSlotsFrom(newValue)
@@ -150,7 +146,6 @@
             this[privateName] = newValue
         }
         */
-
     }
 
 }.initThisClass());

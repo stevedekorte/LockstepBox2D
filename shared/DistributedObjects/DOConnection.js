@@ -195,7 +195,7 @@
     sendResponse (response) {
         const json = response.asJson(new Set(), this)
         const s = JSON.stringify(json)
-        this.rawSend(s)
+        this.send(s)
     }
 
     // --- proxy ---
@@ -221,7 +221,7 @@
             const json = rm.asJson(new Set(), this)
             const s = JSON.stringify(json)
             this.debugLog(" SEND " + rm.description());
-            this.rawSend(s)
+            this.send(s)
             assert(future)
         } catch (e) {
             console.log("ERROR: ", e)
@@ -230,9 +230,9 @@
         return future
     }
 
-    rawSend (s) {
+    send (s) {
         this.assertOpen()
-        this.webSocket().send(s)
+        super.send(s)
     }
 
     newFutureForMessage (rm) {

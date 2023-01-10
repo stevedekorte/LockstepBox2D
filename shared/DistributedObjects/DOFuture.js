@@ -12,7 +12,7 @@
         this.newSlot("isDone", false)
         this.newSlot("timeoutId", null)
         this.newSlot("timeout", 30000)
-        this.newSlot("resultProxy", null)
+        //this.newSlot("resultProxy", null)
         this.newSlot("doesIgnoreResponse", false)
     }
 

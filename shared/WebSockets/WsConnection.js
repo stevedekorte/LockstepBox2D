@@ -11,6 +11,12 @@
     - some weirdness here due to node.js and browser versions of WebSocket API being slightly different
       such as: conventions on registering for events, checking WebSocket state, etc
 
+    Delegte methods:
+
+    - onConnectionClose(this)
+    - onConnectionError(this, error)
+    - onConnectionMessage(this, data)
+
 */
 
 (class WsConnection extends Base {
@@ -28,8 +34,8 @@
         this.newSlot("sendPingTimeout", null); // timeout to send next ping
         this.newSlot("pongTimeout", null); // timeout to stop waiting for pong and close
         */
-        this.newSlot("delegate", null)
         this.newSlot("isSecure", false)
+        this.newSlot("delegate", null)
     }
 
     init () {
@@ -56,14 +62,14 @@
 
     setupWebSocket () {
         if (this.isInBrowser()) {
-            this.browser_setupWebSocket()
+            this.setupForBrowser()
         } else {
-            this.node_setupWebSocket()
+            this.setupForNode()
         }
         return this
     }
 
-    browser_setupWebSocket () {
+    setupForBrowser () {
         //this.resetPingTimeout()
         const ws = this.webSocket()
         assert(!ws._connection)
@@ -93,7 +99,7 @@
         return this
     }
 
-    node_setupWebSocket () {
+    setupForNode () {
         const ws = this.webSocket()
         if (ws) {
             ws.on('close', (code, reason) => {
@@ -140,6 +146,7 @@
 
     onOpen () {
         this.debugLog(" onOpen()")
+        // don't need open delegate message as there is an open delegate message sent by server?
     }
 
     /*
@@ -154,8 +161,10 @@
             console.log(this.type() + " onClose() ERROR: INVALID CERT")
         }
         this.debugLog(" onClose(code: " + code + ", reason:" + reason + ")")
-        if (this.delegate()) {
-            this.delegate().onConnectionClose(this)
+
+        const d = this.delegate()
+        if (d && d.onConnectionClose) {
+            d.onConnectionClose(this)
         }
 
         this.shutdown(this);
@@ -166,17 +175,29 @@
         this.debugLog(" onError(event) ", event)
         this.setError(event.message)
         this.shutdown()
+
+        const d = this.delegate()
+        if (d && d.onConnectionError) {
+            d.onConnectionError(this, event.message)
+        }
     }
 
     onMessage (data) {
         //this.debugLog(" onMessage(" + data.toString() + ")");
+        const d = this.delegate()
+        if (d && d.onConnectionMessage) {
+            d.onConnectionMessage(this, data)
+        }
     }
 
-    // --- keep alive ping/pong timeouts ---
+    send (s) {
+        this.assertOpen()
+        this.webSocket().send(s)
+    }
 
     /*
 
-    // server side 
+    // server side keep alive
 
     clearTimeouts () {
         this.clearSendPingTimeout()
@@ -222,7 +243,7 @@
 
     /*
 
-    // client side
+    // client side keep alive
 
     clearPingTimeout () {
         if (this.pingTimeout()) {
